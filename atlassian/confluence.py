@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import json
+from wsgiref.util import request_uri
 
 from requests import HTTPError
 from deprecated import deprecated
@@ -31,7 +32,8 @@ class Confluence(AtlassianRestAPI):
         ".svg": "image/svg+xml",
     }
 
-    def __init__(self, url, *args, **kwargs):
+    def __init__(self, url, rest_url,*args, **kwargs):
+        self.rest_url = rest_url
         if ("atlassian.net" in url or "jira.com" in url) and ("/wiki" not in url):
             url = AtlassianRestAPI.url_joiner(url, "/wiki")
             if "cloud" not in kwargs:
@@ -92,7 +94,7 @@ class Confluence(AtlassianRestAPI):
         :param title: Title of the page
         :return:
         """
-        url = "rest/api/content"
+        url = f"{self.rest_url}/content"
         params = {}
         if space is not None:
             params["spaceKey"] = str(space)
@@ -133,7 +135,7 @@ class Confluence(AtlassianRestAPI):
         if expand is not None:
             params["expand"] = expand
 
-        url = "rest/api/content/{page_id}/child/{type}".format(page_id=page_id, type=type)
+        url = f"{self.rest_url}/content/{page_id}/child/{type}".format(page_id=page_id, type=type)
         log.info(url)
 
         try:
@@ -264,7 +266,7 @@ class Confluence(AtlassianRestAPI):
                  callback. Will raise requests.HTTPError on bad input, potentially.
                  If it has IndexError then return the None.
         """
-        url = "rest/api/content"
+        url = f"{self.rest_url}/content"
         params = {}
         if start is not None:
             params["start"] = int(start)
@@ -318,7 +320,7 @@ class Confluence(AtlassianRestAPI):
             params["status"] = status
         if version:
             params["version"] = version
-        url = "rest/api/content/{page_id}".format(page_id=page_id)
+        url = "{rest_url}/content/{page_id}".format(page_id=page_id, rest_url=self.rest_url)
 
         try:
             response = self.get(url, params=params)
@@ -347,7 +349,7 @@ class Confluence(AtlassianRestAPI):
         :return: The JSON data returned from the content/{id}/label endpoint, or the results of the
                  callback. Will raise requests.HTTPError on bad input, potentially.
         """
-        url = "rest/api/content/{id}/label".format(id=page_id)
+        url = "{rest_url}/content/{id}/label".format(id=page_id, rest_url=self.rest_url)
         params = {}
         if prefix:
             params["prefix"] = prefix
@@ -401,7 +403,7 @@ class Confluence(AtlassianRestAPI):
             params["location"] = location
         if depth:
             params["depth"] = depth
-        url = "rest/api/content/{id}/child/comment".format(id=content_id)
+        url = "{rest_url}/content/{id}/child/comment".format(id=content_id, rest_url=self.rest_url)
 
         try:
             response = self.get(url, params=params)
@@ -425,7 +427,7 @@ class Confluence(AtlassianRestAPI):
         :param status:
         :return:
         """
-        url = "rest/api/content/{page_id}?status={status}".format(page_id=page_id, status=status)
+        url = "{rest_url}/content/{page_id}?status={status}".format(page_id=page_id, status=status, rest_url=self.rest_url)
 
         try:
             response = self.get(url)
@@ -449,7 +451,7 @@ class Confluence(AtlassianRestAPI):
                       fixed system limits. Default: 50
         :return:
         """
-        url = "rest/api/content/search"
+        url = f"{self.rest_url}/content/search"
         params = {}
         if label:
             params["cql"] = 'type={type} AND label="{label}"'.format(type="page", label=label)
@@ -485,7 +487,7 @@ class Confluence(AtlassianRestAPI):
         :param content_type: the content type to return. Default value: page. Valid values: page, blogpost.
         :return:
         """
-        url = "rest/api/content"
+        url = f"{self.rest_url}/content"
         params = {}
         if space:
             params["spaceKey"] = space
@@ -550,7 +552,7 @@ class Confluence(AtlassianRestAPI):
                             fixed system limits. Default: 500
         :return:
         """
-        url = "rest/api/content?cql=space=spaceKey={space} and status={status}".format(space=space, status=status)
+        url = "{rest_url}/content?cql=space=spaceKey={space} and status={status}".format(space=space, status=status, rest_url=self.rest_url)
         params = {}
         if limit:
             params["limit"] = limit
@@ -582,7 +584,7 @@ class Confluence(AtlassianRestAPI):
         :param content_id:
         :return: Return the raw json response
         """
-        url = "rest/api/content/{}/restriction/byOperation".format(content_id)
+        url = "{rest_url}/content/{content_id}/restriction/byOperation".format(content_id=content_id,rest_url=self.rest_url)
         return self.get(url)
 
     def remove_page_from_trash(self, page_id):
@@ -608,7 +610,7 @@ class Confluence(AtlassianRestAPI):
         :return:
         """
         try:
-            response = self.delete("rest/api/content/{}".format(content_id))
+            response = self.delete("{}/content/{}".format(self.rest_url, content_id))
         except HTTPError as e:
             if e.response.status_code == 404:
                 # Raise ApiError as the documented reason is ambiguous
@@ -635,7 +637,7 @@ class Confluence(AtlassianRestAPI):
         :param recursive: OPTIONAL: if True - will recursively delete all children pages too
         :return:
         """
-        url = "rest/api/content/{page_id}".format(page_id=page_id)
+        url = "{rest_url}/content/{page_id}".format(page_id=page_id,rest_url=self.rest_url)
         if recursive:
             children_pages = self.get_page_child_by_type(page_id)
             for children_page in children_pages:
@@ -686,7 +688,7 @@ class Confluence(AtlassianRestAPI):
         :return:
         """
         log.info('Creating {type} "{space}" -> "{title}"'.format(space=space, title=title, type=type))
-        url = "rest/api/content/"
+        url = f"{self.rest_url}/content"
         data = {
             "type": type,
             "title": title,
@@ -779,9 +781,9 @@ class Confluence(AtlassianRestAPI):
 
         if template_id:
             data["templateId"] = template_id
-            return self.put("rest/api/template", data=json.dumps(data))
+            return self.put(f"{self.rest_url}/template", data=json.dumps(data))
 
-        return self.post("rest/api/template", json=data)
+        return self.post(f"{self.rest_url}/template", json=data)
 
     @deprecated(version="3.7.0", reason="Use get_content_template()")
     def get_template_by_id(self, template_id):
@@ -814,7 +816,7 @@ class Confluence(AtlassianRestAPI):
         :param str template_id: The ID of the content template to be returned
         :return:
         """
-        url = "rest/api/template/{template_id}".format(template_id=template_id)
+        url = "{rest_url}/template/{template_id}".format(template_id=template_id, rest_url=self.rest_url)
 
         try:
             response = self.get(url)
@@ -877,7 +879,7 @@ class Confluence(AtlassianRestAPI):
                             fixed system limits. Default: 25
         :param expand: OPTIONAL: A multi-value parameter indicating which properties of the template to expand.
         """
-        url = "rest/api/template/blueprint"
+        url = f"{self.rest_url}/template/blueprint"
         params = {}
         if space:
             params["spaceKey"] = space
@@ -948,7 +950,7 @@ class Confluence(AtlassianRestAPI):
         :param expand: OPTIONAL: A multi-value parameter indicating which properties of the template to expand.
             e.g. ``body``
         """
-        url = "rest/api/template/page"
+        url = f"{self.rest_url}/template/page"
         params = {}
         if space:
             params["spaceKey"] = space
@@ -987,7 +989,7 @@ class Confluence(AtlassianRestAPI):
         :param str template_id: The ID of the template to be deleted.
         :return:
         """
-        return self.delete("rest/api/template/{}".format(template_id))
+        return self.delete("{}/template/{}".format(self.rest_url, template_id))
 
     def get_all_spaces(self, start=0, limit=500, expand=None, space_type=None, space_status=None):
         """
@@ -999,7 +1001,7 @@ class Confluence(AtlassianRestAPI):
         :param space_status: OPTIONAL: Filter the list of spaces returned by status (current, archived)
         :param expand: OPTIONAL: additional info, e.g. metadata, icon, description, homepage
         """
-        url = "rest/api/space"
+        url = f"{self.rest_url}/space"
         params = {}
         if start:
             params["start"] = start
@@ -1026,7 +1028,7 @@ class Confluence(AtlassianRestAPI):
         }
 
         try:
-            response = self.post("rest/api/content/", data=data)
+            response = self.post(f"{self.rest_url}/content/", data=data)
         except HTTPError as e:
             if e.response.status_code == 404:
                 raise ApiPermissionError(
@@ -1078,7 +1080,7 @@ class Confluence(AtlassianRestAPI):
                 "minorEdit": "true",
             }
             headers = {"X-Atlassian-Token": "no-check", "Accept": "application/json"}
-            path = "rest/api/content/{page_id}/child/attachment".format(page_id=page_id)
+            path = "{rest_url}/content/{page_id}/child/attachment".format(page_id=page_id,rest_url=self.rest_url)
             # Check if there is already a file with the same name
             attachments = self.get(path=path, headers=headers, params={"filename": name})
             if attachments.get("size"):
@@ -1226,7 +1228,7 @@ class Confluence(AtlassianRestAPI):
         :return
         """
         params = {"limit": limit, "start": start}
-        url = "rest/experimental/content/{}/version".format(attachment_id)
+        url = "{rest_url}/experimental/content/{attachment_id}/version".format(attachment_id=attachment_id,rest_url=self.rest_url)
         return (self.get(url, params=params) or {}).get("results")
 
     # @todo prepare more attachments info
@@ -1252,7 +1254,7 @@ class Confluence(AtlassianRestAPI):
             params["filename"] = filename
         if media_type:
             params["mediaType"] = media_type
-        url = "rest/api/content/{id}/child/attachment".format(id=page_id)
+        url = "{rest_url}/content/{id}/child/attachment".format(id=page_id,rest_url=self.rest_url)
 
         try:
             response = self.get(url, params=params)
@@ -1276,7 +1278,7 @@ class Confluence(AtlassianRestAPI):
         :param label: label to add
         :return:
         """
-        url = "rest/api/content/{page_id}/label".format(page_id=page_id)
+        url = "r{rest_url}/content/{page_id}/label".format(page_id=page_id,rest_url=self.rest_url)
         data = {"prefix": "global", "name": label}
 
         try:
@@ -1301,7 +1303,7 @@ class Confluence(AtlassianRestAPI):
         :param label: label name
         :return:
         """
-        url = "rest/api/content/{page_id}/label".format(page_id=page_id)
+        url = "{rest_url}/content/{page_id}/label".format(page_id=page_id,rest_url=self.rest_url)
         params = {"id": page_id, "name": label}
 
         try:
@@ -1325,7 +1327,7 @@ class Confluence(AtlassianRestAPI):
         return response
 
     def history(self, page_id):
-        url = "rest/api/content/{0}/history".format(page_id)
+        url = "{rest_url}/content/{page_id}/history".format(page_id=page_id,rest_url=self.rest_url)
         try:
             response = self.get(url)
         except HTTPError as e:
@@ -1351,7 +1353,7 @@ class Confluence(AtlassianRestAPI):
         :param version_number:
         :return:
         """
-        url = "rest/experimental/content/{0}/version/{1}".format(content_id, version_number)
+        url = "{rest_url}/experimental/content/{content_id}/version/{version_number}".format(content_id=content_id, version_number=version_number,rest_url=self.rest_url)
         return self.get(url)
 
     def remove_content_history(self, page_id, version_number):
@@ -1361,7 +1363,7 @@ class Confluence(AtlassianRestAPI):
         :param version_number: version number
         :return:
         """
-        url = "rest/experimental/content/{id}/version/{versionNumber}".format(id=page_id, versionNumber=version_number)
+        url = "{rest_url}/experimental/content/{id}/version/{versionNumber}".format(id=page_id, versionNumber=version_number,rest_url=self.rest_url)
         self.delete(url)
 
     def remove_page_history(self, page_id, version_number):
@@ -1380,7 +1382,7 @@ class Confluence(AtlassianRestAPI):
         :param version_id:
         :return:
         """
-        url = "rest/api/content/{id}/version/{versionId}".format(id=page_id, versionId=version_id)
+        url = "{rest_url}/content/{id}/version/{versionId}".format(id=page_id, versionId=version_id,rest_url=self.rest_url)
         self.delete(url)
 
     def remove_page_history_keep_version(self, page_id, keep_last_versions):
@@ -1532,7 +1534,7 @@ class Confluence(AtlassianRestAPI):
             data["version"]["message"] = version_comment
 
         try:
-            response = self.put("rest/api/content/{0}".format(page_id), data=data)
+            response = self.put("{rest_url}/content/{page_id}".format(page_id=page_id,rest_url=self.rest_url), data=data)
         except HTTPError as e:
             if e.response.status_code == 400:
                 raise ApiValueError(
@@ -1598,7 +1600,7 @@ class Confluence(AtlassianRestAPI):
                 data["version"]["message"] = version_comment
 
             try:
-                response = self.put("rest/api/content/{0}".format(page_id), data=data)
+                response = self.put("{rest_url}/content/{page_id}".format(page_id=page_id,rest_url=self.rest_url), data=data)
             except HTTPError as e:
                 if e.response.status_code == 400:
                     raise ApiValueError(
@@ -1743,7 +1745,7 @@ class Confluence(AtlassianRestAPI):
         :return:
         """
         data = {"value": wiki, "representation": "wiki"}
-        return self.post("rest/api/contentbody/convert/storage", data=data)
+        return self.post(f"{self.rest_url}/contentbody/convert/storage", data=data)
 
     def convert_storage_to_view(self, storage):
         """
@@ -1752,7 +1754,7 @@ class Confluence(AtlassianRestAPI):
         :return:
         """
         data = {"value": storage, "representation": "storage"}
-        return self.post("rest/api/contentbody/convert/view", data=data)
+        return self.post(f"{self.rest_url}/contentbody/convert/view", data=data)
 
     def set_page_property(self, page_id, data):
         """
@@ -1761,7 +1763,7 @@ class Confluence(AtlassianRestAPI):
         :param data: data should be as json data
         :return:
         """
-        url = "rest/api/content/{page_id}/property".format(page_id=page_id)
+        url = "{rest_url}/content/{page_id}/property".format(page_id=page_id,rest_url=self.rest_url)
         json_data = data
 
         try:
@@ -1795,7 +1797,7 @@ class Confluence(AtlassianRestAPI):
         :data: property data in json format
         :return:
         """
-        url = "rest/api/content/{page_id}/property/{key}".format(page_id=page_id, key=data.get("key"))
+        url = "{rest_url}/content/{page_id}/property/{key}".format(page_id=page_id, key=data.get("key"), rest_url=self.rest_url)
         try:
             response = self.put(path=url, data=data)
         except HTTPError as e:
@@ -1834,8 +1836,8 @@ class Confluence(AtlassianRestAPI):
         :param page_property: key of property
         :return:
         """
-        url = "rest/api/content/{page_id}/property/{page_property}".format(
-            page_id=page_id, page_property=str(page_property)
+        url = "{rest_url}/content/{page_id}/property/{page_property}".format(
+            page_id=page_id, page_property=str(page_property), rest_url=self.rest_url
         )
         try:
             response = self.delete(path=url)
@@ -1859,7 +1861,7 @@ class Confluence(AtlassianRestAPI):
         :param page_property_key: key of property
         :return:
         """
-        url = "rest/api/content/{page_id}/property/{key}".format(page_id=page_id, key=str(page_property_key))
+        url = "{rest_url}/content/{page_id}/property/{key}".format(page_id=page_id, key=str(page_property_key),rest_url=self.rest_url)
         try:
             response = self.get(path=url)
         except HTTPError as e:
@@ -1882,7 +1884,7 @@ class Confluence(AtlassianRestAPI):
         :param page_id: content_id format
         :return: get properties
         """
-        url = "rest/api/content/{page_id}/property".format(page_id=page_id)
+        url = "{rest_url}/content/{page_id}/property".format(page_id=page_id,rest_url=self.rest_url)
 
         try:
             response = self.get(path=url)
@@ -1905,7 +1907,7 @@ class Confluence(AtlassianRestAPI):
         :param page_id: content_id format
         :return: get properties
         """
-        url = "rest/api/content/{page_id}?expand=ancestors".format(page_id=page_id)
+        url = "{rest_url}/content/{page_id}?expand=ancestors".format(page_id=page_id,rest_url=self.rest_url)
 
         try:
             response = self.get(path=url)
@@ -1943,7 +1945,7 @@ class Confluence(AtlassianRestAPI):
                                 fixed system limits. Default: 1000
         :return:
         """
-        url = "rest/api/group?limit={limit}&start={start}".format(limit=limit, start=start)
+        url = "{rest_url}/group?limit={limit}&start={start}".format(limit=limit, start=start,rest_url=self.rest_url)
 
         try:
             response = self.get(url)
@@ -1965,8 +1967,8 @@ class Confluence(AtlassianRestAPI):
         :param expand: OPTIONAL: A comma separated list of properties to expand on the content. status
         :return:
         """
-        url = "rest/api/group/{group_name}/member?limit={limit}&start={start}&expand={expand}".format(
-            group_name=group_name, limit=limit, start=start, expand=expand
+        url = "{rest_url}/group/{group_name}/member?limit={limit}&start={start}&expand={expand}".format(
+            group_name=group_name, limit=limit, start=start, expand=expand, request_url=self.rest_url
         )
 
         try:
@@ -2009,7 +2011,7 @@ class Confluence(AtlassianRestAPI):
         :param params: OPTIONAL: dictionary of additional URL parameters
         :return: Returns the space along with its ID
         """
-        url = "rest/api/space/{space_key}".format(space_key=space_key)
+        url = "{rest_url}/space/{space_key}".format(space_key=space_key, rest_url=self.rest_url)
         params = params or {}
         if expand:
             params["expand"] = expand
@@ -2052,7 +2054,7 @@ class Confluence(AtlassianRestAPI):
         """
 
         content_type = "{}".format("/" + content_type if content_type else "")
-        url = "rest/api/space/{space_key}/content{content_type}".format(space_key=space_key, content_type=content_type)
+        url = "{rest_url}/space/{space_key}/content{content_type}".format(space_key=space_key, content_type=content_type, rest_url=self.rest_url)
         params = {
             "depth": depth,
             "start": start,
@@ -2089,7 +2091,7 @@ class Confluence(AtlassianRestAPI):
         :return:
         """
         data = {"key": space_key, "name": space_name}
-        self.post("rest/api/space", data=data)
+        self.post(f"{self.rest_url}/space", data=data)
 
     def delete_space(self, space_key):
         """
@@ -2097,7 +2099,7 @@ class Confluence(AtlassianRestAPI):
         :param space_key:
         :return:
         """
-        url = "rest/api/space/{}".format(space_key)
+        url = "{rest_url}/space/{space_key}".format(space_key=space_key, rest_url=self.rest_url)
 
         try:
             response = self.delete(url)
@@ -2115,7 +2117,7 @@ class Confluence(AtlassianRestAPI):
         return response
 
     def get_space_property(self, space_key, expand=None):
-        url = "rest/api/space/{space}/property".format(space=space_key)
+        url = "{rest_url}/space/{space}/property".format(space=space_key,rest_url=self.rest_url)
         params = {}
         if expand:
             params["expand"] = expand
@@ -2143,7 +2145,7 @@ class Confluence(AtlassianRestAPI):
                 Possible param is "status". Results are "Active, Deactivated"
         :return: Returns the user details
         """
-        url = "rest/api/user"
+        url = f"{self.rest_url}/user"
         params = {"username": username}
         if expand:
             params["expand"] = expand
@@ -2171,7 +2173,7 @@ class Confluence(AtlassianRestAPI):
                 Possible param is "status". Results are "Active, Deactivated"
         :return: Returns the user details
         """
-        url = "rest/api/user"
+        url = f"{self.rest_url}/user"
         params = {"accountId": accountid}
         if expand:
             params["expand"] = expand
@@ -2199,7 +2201,7 @@ class Confluence(AtlassianRestAPI):
                 Possible param is "status". Results are "Active, Deactivated"
         :return: Returns the user details
         """
-        url = "rest/api/user"
+        url = f"{self.rest_url}/user"
         params = {"key": userkey}
         if expand:
             params["expand"] = expand
@@ -2258,7 +2260,7 @@ class Confluence(AtlassianRestAPI):
             params["excerpt"] = excerpt
 
         try:
-            response = self.get("rest/api/search", params=params)
+            response = self.get(f"{self.rest_url}/search", params=params)
         except HTTPError as e:
             if e.response.status_code == 400:
                 raise ApiValueError("The query cannot be parsed", reason=e)
@@ -2308,7 +2310,7 @@ class Confluence(AtlassianRestAPI):
         """
         page_id = ""
 
-        url = 'rest/api/content/search?cql=parent={}%20AND%20space="{}"'.format(parent_id, space)
+        url = '{}/content/search?cql=parent={}%20AND%20space="{}"'.format(self.rest_url, parent_id, space)
 
         try:
             response = self.get(url, {})
@@ -2372,7 +2374,7 @@ class Confluence(AtlassianRestAPI):
         return self.post(url, headers=headers)
 
     def check_access_mode(self):
-        return self.get("rest/api/accessmode")
+        return self.get(f"{self.rest_url}/accessmode")
 
     def anonymous(self):
         """
@@ -2380,7 +2382,7 @@ class Confluence(AtlassianRestAPI):
         :return:
         """
         try:
-            response = self.get("rest/api/user/anonymous")
+            response = self.get(f"{self.rest_url}/user/anonymous")
         except HTTPError as e:
             if e.response.status_code == 403:
                 raise ApiPermissionError(
@@ -2433,7 +2435,7 @@ class Confluence(AtlassianRestAPI):
             params["start"] = start
         if limit:
             params["limit"] = limit
-        return self.get("rest/api/longtask", params=params)
+        return self.get(f"{self.rest_url}/longtask", params=params)
 
     def check_long_task_result(self, task_id, expand=None):
         """
@@ -2447,7 +2449,7 @@ class Confluence(AtlassianRestAPI):
             params = {"expand": expand}
 
         try:
-            response = self.get("rest/api/longtask/{}".format(task_id), params=params)
+            response = self.get("{rest_url}/longtask/{task_id}".format(rest_url=self.rest_url, task_id=task_id), params=params)
         except HTTPError as e:
             if e.response.status_code == 404:
                 # Raise ApiError as the documented reason is ambiguous
@@ -2519,7 +2521,7 @@ class Confluence(AtlassianRestAPI):
         :param search_string:
         :return:
         """
-        url = "rest/api/audit"
+        url = f"{self.rest_url}/audit"
         params = {}
         if start_date:
             params["startDate"] = start_date
@@ -2629,7 +2631,7 @@ class Confluence(AtlassianRestAPI):
         :param group_name: str
         :return: Current state of the group
         """
-        url = "rest/api/2/group/user"
+        url = f"{self.rest_url}/2/group/user"
         params = {"groupname": group_name}
         data = {"name": username}
         return self.post(url, params=params, data=data)
@@ -2645,7 +2647,7 @@ class Confluence(AtlassianRestAPI):
         :param operation_target: str
         :return: Current permissions of space
         """
-        url = "rest/api/space/{}/permission".format(space_key)
+        url = "{}/space/{}/permission".format(self.rest_url, space_key)
         data = {
             "subject": {"type": subject_type, "identifier": subject_id},
             "operation": {"key": operation_key, "target": operation_target},
