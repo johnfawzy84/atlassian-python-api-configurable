@@ -3,7 +3,6 @@ import logging
 import os
 import time
 import json
-from wsgiref.util import request_uri
 
 from requests import HTTPError
 from deprecated import deprecated
